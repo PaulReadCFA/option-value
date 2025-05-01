@@ -2,147 +2,156 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Option Exercise Value Explorer with PV(X) Controls</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px auto; line-height: 1.6; max-width: 700px; }
-        canvas { width: 100% !important; height: 350px !important; }
-        .highlight { background-color: #e0f7ff; padding: 4px; border-radius: 4px; }
-        .formula, .description, .questions { margin-top: 20px; padding: 10px; background: #f5f5f5; border-left: 4px solid #0077cc; }
-        .control-group { margin-top: 10px; }
-    </style>
+  <meta charset="UTF-8">
+  <title>Option Exercise Value Visualizer with ITM/ATM/OTM</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px auto; line-height: 1.6; max-width: 720px; }
+    canvas { width: 100% !important; height: 350px !important; }
+    .highlight { background-color: #e0f7ff; padding: 4px; border-radius: 4px; }
+    .formula, .description, .questions, .status { margin-top: 20px; padding: 10px; border-left: 4px solid #0077cc; background: #f5f5f5; }
+    .itm { color: green; font-weight: bold; }
+    .atm { color: orange; font-weight: bold; }
+    .otm { color: red; font-weight: bold; }
+  </style>
 </head>
 <body>
-
-<h2>Option Exercise Value Visualizer (Adjust PV(X))</h2>
-<p>
-    Adjust the underlying price (St), interest rate (r), and time to expiry (T − t) to see how call and put exercise values change.
-</p>
+<h2>Option Exercise Value Visualizer (with Moneyness)</h2>
+<p>Adjust the underlying price (St), interest rate (r), and time to expiry (T − t) to see how option exercise values change, and whether the option is In, At, or Out of the Money.</p>
 
 <div class="description">
-    <strong>Formulas:</strong><br>
-    Call: max(0, St − PV(X))<br>
-    Put: max(0, PV(X) − St)<br>
-    Where PV(X) = X / (1 + r)<sup>(T − t)</sup>
+  <strong>Formulas:</strong><br>
+  Call: max(0, St − PV(X))<br>
+  Put: max(0, PV(X) − St)<br>
+  PV(X) = X / (1 + r)<sup>(T − t)</sup>
 </div>
 
-<div class="control-group">
-    <label for="priceSlider">Underlying Price (St): <span id="priceLabel">100</span></label><br>
-    <input type="range" id="priceSlider" min="60" max="140" value="100" step="1"><br>
+<label for="priceSlider">Underlying Price (St): <span id="priceLabel">100</span></label><br>
+<input type="range" id="priceSlider" min="60" max="140" value="100" step="1"><br>
 
-    <label for="rateSlider">Risk-Free Rate (r): <span id="rateLabel">0.05</span></label><br>
-    <input type="range" id="rateSlider" min="0.01" max="0.10" value="0.05" step="0.01"><br>
+<label for="rateSlider">Risk-Free Rate (r): <span id="rateLabel">0.05</span></label><br>
+<input type="range" id="rateSlider" min="0.01" max="0.10" value="0.05" step="0.01"><br>
 
-    <label for="timeSlider">Time to Expiry (T − t in years): <span id="timeLabel">0.25</span></label><br>
-    <input type="range" id="timeSlider" min="0.01" max="1" value="0.25" step="0.01">
-</div>
+<label for="timeSlider">Time to Expiry (T − t): <span id="timeLabel">0.25</span></label><br>
+<input type="range" id="timeSlider" min="0.01" max="1" value="0.25" step="0.01">
 
 <canvas id="chart"></canvas>
 
 <div class="formula">
-    <p><strong>Current PV(X):</strong> <span id="pvxLabel"></span></p>
-    <strong>Call Value:</strong> <span id="callFormula"></span><br>
-    <strong>Put Value:</strong> <span id="putFormula"></span>
+  <p><strong>Current PV(X):</strong> <span id="pvxLabel"></span></p>
+  <strong>Call Value:</strong> <span id="callFormula"></span><br>
+  <strong>Put Value:</strong> <span id="putFormula"></span>
+</div>
+
+<div class="status">
+  <strong>Status:</strong> <span id="optionStatus">Evaluating...</span>
 </div>
 
 <div class="questions">
-    <strong>Try These Questions:</strong>
-    <ol>
-        <li>What happens to PV(X) as interest rate or time increases?</li>
-        <li>How does that affect the call and put value gap?</li>
-        <li>At what point is the option considered At The Money (ATM)?</li>
-    </ol>
+  <strong>Try These Questions:</strong>
+  <ol>
+    <li>What happens to PV(X) as r or T − t increases?</li>
+    <li>What is the status (ITM/ATM/OTM) at PV(X)?</li>
+    <li>How does moneyness shift as St crosses PV(X)?</li>
+  </ol>
 </div>
 
 <script>
-    const strikePrice = 100;
-    const prices = Array.from({length: 81}, (_, i) => 60 + i);
+  const strikePrice = 100;
+  const prices = Array.from({length: 81}, (_, i) => 60 + i);
+  const ctx = document.getElementById('chart').getContext('2d');
 
-    const ctx = document.getElementById('chart').getContext('2d');
-
-    const chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: prices,
-            datasets: [
-                {
-                    label: 'Call Exercise Value (discounted)',
-                    data: [],
-                    borderColor: 'blue',
-                    fill: false
-                },
-                {
-                    label: 'Put Exercise Value (discounted)',
-                    data: [],
-                    borderColor: 'green',
-                    fill: false
-                },
-                {
-                    label: 'Current Call Value',
-                    data: [],
-                    borderColor: 'blue',
-                    borderDash: [5, 5],
-                    pointRadius: 6,
-                    pointBackgroundColor: 'blue',
-                    showLine: false
-                },
-                {
-                    label: 'Current Put Value',
-                    data: [],
-                    borderColor: 'green',
-                    borderDash: [5, 5],
-                    pointRadius: 6,
-                    pointBackgroundColor: 'green',
-                    showLine: false
-                }
-            ]
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: prices,
+      datasets: [
+        {
+          label: 'Call Value',
+          data: [],
+          borderColor: 'green',
+          fill: false
         },
-        options: {
-            responsive: true,
-            animation: false,
-            scales: {
-                x: { title: { display: true, text: 'Underlying Price (St)' } },
-                y: { title: { display: true, text: 'Exercise Value' } }
-            }
+        {
+          label: 'Put Value',
+          data: [],
+          borderColor: 'red',
+          fill: false
+        },
+        {
+          label: 'Selected Call',
+          data: [],
+          borderColor: 'green',
+          borderDash: [5, 5],
+          pointRadius: 6,
+          pointBackgroundColor: 'green',
+          showLine: false
+        },
+        {
+          label: 'Selected Put',
+          data: [],
+          borderColor: 'red',
+          borderDash: [5, 5],
+          pointRadius: 6,
+          pointBackgroundColor: 'red',
+          showLine: false
         }
-    });
-
-    function updateChart() {
-        const St = parseFloat(document.getElementById('priceSlider').value);
-        const r = parseFloat(document.getElementById('rateSlider').value);
-        const T_minus_t = parseFloat(document.getElementById('timeSlider').value);
-        const pvX = strikePrice / Math.pow(1 + r, T_minus_t);
-
-        document.getElementById('priceLabel').textContent = St;
-        document.getElementById('rateLabel').textContent = r.toFixed(2);
-        document.getElementById('timeLabel').textContent = T_minus_t.toFixed(2);
-        document.getElementById('pvxLabel').textContent = pvX.toFixed(2);
-
-        const callValues = prices.map(S => Math.max(S - pvX, 0));
-        const putValues = prices.map(S => Math.max(pvX - S, 0));
-        const idx = prices.indexOf(St);
-        const callVal = Math.max(St - pvX, 0);
-        const putVal = Math.max(pvX - St, 0);
-
-        chart.data.datasets[0].data = callValues;
-        chart.data.datasets[1].data = putValues;
-        chart.data.datasets[2].data = prices.map((_, i) => i === idx ? {x: St, y: callVal} : {x: null, y: null});
-        chart.data.datasets[3].data = prices.map((_, i) => i === idx ? {x: St, y: putVal} : {x: null, y: null});
-        chart.update();
-
-        document.getElementById("callFormula").innerHTML =
-            `max(0, <span class="highlight">${St.toFixed(2)}</span> − ${pvX.toFixed(2)}) = <strong>${callVal.toFixed(2)}</strong>`;
-        document.getElementById("putFormula").innerHTML =
-            `max(0, ${pvX.toFixed(2)} − <span class="highlight">${St.toFixed(2)}</span>) = <strong>${putVal.toFixed(2)}</strong>`;
+      ]
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      scales: {
+        x: { title: { display: true, text: 'Underlying Price (St)' } },
+        y: { title: { display: true, text: 'Exercise Value' } }
+      }
     }
+  });
 
-    document.getElementById('priceSlider').addEventListener('input', updateChart);
-    document.getElementById('rateSlider').addEventListener('input', updateChart);
-    document.getElementById('timeSlider').addEventListener('input', updateChart);
+  function updateChart() {
+    const St = parseFloat(document.getElementById('priceSlider').value);
+    const r = parseFloat(document.getElementById('rateSlider').value);
+    const T_minus_t = parseFloat(document.getElementById('timeSlider').value);
+    const pvX = strikePrice / Math.pow(1 + r, T_minus_t);
 
-    updateChart();
+    document.getElementById('priceLabel').textContent = St;
+    document.getElementById('rateLabel').textContent = r.toFixed(2);
+    document.getElementById('timeLabel').textContent = T_minus_t.toFixed(2);
+    document.getElementById('pvxLabel').textContent = pvX.toFixed(2);
+
+    const callValues = prices.map(S => Math.max(S - pvX, 0));
+    const putValues = prices.map(S => Math.max(pvX - S, 0));
+    const idx = prices.indexOf(St);
+    const callVal = Math.max(St - pvX, 0);
+    const putVal = Math.max(pvX - St, 0);
+
+    chart.data.datasets[0].data = callValues;
+    chart.data.datasets[1].data = putValues;
+    chart.data.datasets[2].data = prices.map((_, i) => i === idx ? {x: St, y: callVal} : {x: null, y: null});
+    chart.data.datasets[3].data = prices.map((_, i) => i === idx ? {x: St, y: putVal} : {x: null, y: null});
+    chart.update();
+
+    document.getElementById("callFormula").innerHTML =
+      `max(0, <span class="highlight">${St.toFixed(2)}</span> − ${pvX.toFixed(2)}) = <strong>${callVal.toFixed(2)}</strong>`;
+    document.getElementById("putFormula").innerHTML =
+      `max(0, ${pvX.toFixed(2)} − <span class="highlight">${St.toFixed(2)}</span>) = <strong>${putVal.toFixed(2)}</strong>`;
+
+    const delta = Math.abs(St - pvX);
+    const statusEl = document.getElementById("optionStatus");
+    if (delta < 1) {
+      statusEl.innerHTML = "<span class='atm'>ATM (At the Money)</span>";
+    } else if (St > pvX) {
+      statusEl.innerHTML = "<span class='itm'>Call is ITM</span> / <span class='otm'>Put is OTM</span>";
+    } else {
+      statusEl.innerHTML = "<span class='otm'>Call is OTM</span> / <span class='itm'>Put is ITM</span>";
+    }
+  }
+
+  document.getElementById('priceSlider').addEventListener('input', updateChart);
+  document.getElementById('rateSlider').addEventListener('input', updateChart);
+  document.getElementById('timeSlider').addEventListener('input', updateChart);
+
+  updateChart();
 </script>
-
 </body>
 </html>
